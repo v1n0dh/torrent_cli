@@ -2,7 +2,6 @@
 #define TRACKER_HPP
 
 #include <cstdint>
-#include <iostream>
 #include <vector>
 
 #include "../include/torrent_file.hpp"
@@ -23,8 +22,8 @@ public:
 	uint64_t left;
 
 	Tracker(Torrent_File* torrent) : torrent(torrent) {}
-	std::string build_tracker_url(const std::string peer_id, const std::string port);
-	std::vector<Peer*> send_tracker_req(const std::string peer_id, const std::string port);
+	std::string build_tracker_url(const std::string& peer_id, const std::string& port);
+	std::vector<Peer*> send_tracker_req(const std::string& peer_id, const std::string& port);
 
 private:
 	const std::vector<std::string> _tracker_event_str{"started", "stopped", "completed"};

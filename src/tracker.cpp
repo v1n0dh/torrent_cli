@@ -13,11 +13,11 @@
 #include "../include/tracker.hpp"
 #include "../include/utils.hpp"
 
-std::string Tracker::build_tracker_url(const std::string peer_id, const std::string port) {
+std::string Tracker::build_tracker_url(const std::string& peer_id, const std::string& port) {
 	std::stringstream url;
 
 	url << torrent->anounce << '?';
-	url << "info_hash=" << torrent->info_hash << '&';
+	url << "info_hash=" << url_encode_hash(hex_bytes_to_string(torrent->info_hash))  << '&';
 	url << "peer_id=" << peer_id << '&';
 	url << "port=" << port << '&';
 	url << "uploaded=" << this->uploaded << '&';
@@ -54,22 +54,21 @@ std::vector<Peer*> Tracker::extract_peers_from_tracker_resp(const std::string& p
 				<< static_cast<int>(peers_vtr[offset+3]);
 
 		std::string ip = peer_ss.str();
-		ip_address = asio::ip::make_address(ip);
 		peer_ss.str("");    // clear the stream to read port
 
 		// Get the Port Num from the peer list
 		port = peers_vtr[offset+5] | (peers_vtr[offset+4] << 8);
 
-		Peer peer(ip_address, port);
-		peers.push_back(&peer);
+		Peer *peer = new Peer(ip, port);
+		peers.push_back(peer);
 
-		std::cout << "IP: " << std::setw(32) << std::left << ip_address.to_string() << "Port: " << port << std::endl;
+		std::cout << "IP: " << std::setw(32) << std::left << ip << "Port: " << port << std::endl;
 	}
 
 	return peers;
 }
 
-std::vector<Peer*> Tracker::send_tracker_req(const std::string peer_id, const std::string port) {
+std::vector<Peer*> Tracker::send_tracker_req(const std::string& peer_id, const std::string& port) {
 	std::string url = build_tracker_url(peer_id, port);
 
 	cpr::Response response = cpr::Get(cpr::Url{url});

@@ -1,7 +1,7 @@
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <iomanip>
 #include <json/value.h>
 #include <sstream>
 #include <openssl/sha.h>
@@ -10,18 +10,15 @@
 #include "../include/bencode_parser.hpp"
 #include "../include/torrent_file.hpp"
 
-// Converts bencoded info to info_hash using SHA1
-std::string Torrent_Info::hash_info_to_sha1(const std::string info_str) {
+std::vector<uint8_t> Torrent_Info::SHA1_info_hash(const std::string& info_str) {
 	unsigned char raw_hash[SHA_DIGEST_LENGTH];
+	std::vector<uint8_t> final_hash;
+
 	SHA1(reinterpret_cast<const unsigned char*>(info_str.c_str()), info_str.size(), raw_hash);
+	for (int i = 0; i < SHA_DIGEST_LENGTH; i++)
+		final_hash.push_back(static_cast<uint8_t>(raw_hash[i]));
 
-	std::ostringstream info_hash;
-	for (int i = 0; i < SHA_DIGEST_LENGTH; i++) {
-		info_hash << std::setw(1) << '%';
-		info_hash << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(raw_hash[i]);
-	}
-
-	return info_hash.str();
+	return final_hash;
 }
 
 Torrent_File::Torrent_File(const std::string& torrent_file_path) {
@@ -45,5 +42,5 @@ Torrent_File::Torrent_File(const std::string& torrent_file_path) {
 								  bencode_to_json["info"]["name"].asString(),
 								  bencode_to_json["info"]["piece length"].asUInt(),
 								  bencode_to_json["info"]["pieces"].asString());
-	this->info_hash = Torrent_Info::hash_info_to_sha1(bencode_encode(bencode_to_json["info"]));
+	this->info_hash = Torrent_Info::SHA1_info_hash(bencode_encode(bencode_to_json["info"]));
 }
