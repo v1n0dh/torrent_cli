@@ -29,7 +29,10 @@ struct Handshake {
 	Handshake() {}
 	Handshake(const std::vector<uint8_t>& info_hash) : pstr(HANDSHAKE_PSTR), info_hash(info_hash) {}
 
-	// Seralize & Deseralize Handshake Object from raw_bytes
+	// Seralize & Deseralize Handshake Object to & from raw_bytes
+	// raw_bytes buffer from is
+	// <pstr_len><pstr><reserved_bytes><info_hash><peer_id>
+	// pstr_len = 1 byte, pstr = 19 bytes, reserved_bytes = 8 bytes, info_hash = 20 bytes, peer_id = 20 bytes
 	std::vector<uint8_t>& operator>>(std::vector<uint8_t>& raw_bytes);
 	void operator<<(std::vector<uint8_t>& raw_bytes);
 };

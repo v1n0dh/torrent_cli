@@ -1,3 +1,5 @@
+#include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdio>
 #include <iomanip>
@@ -31,4 +33,21 @@ std::string url_encode_hash(const std::string& info_hash) {
 	}
 
 	return url_encode_info_hash.str();
+}
+
+// NOTE: Convert in big-endian format
+int uint8_to_uint32(const std::vector<uint8_t>& bytes) {
+	return
+		(static_cast<uint32_t>(bytes[0]) << 24) |
+		(static_cast<uint32_t>(bytes[1]) << 16) |
+		(static_cast<uint32_t>(bytes[2]) << 8)  |
+		(static_cast<uint32_t>(bytes[3]));
+}
+
+// NOTE: Convert in big-endian format
+std::vector<uint8_t>  uint32_to_uint8(int data) {
+	std::array<uint8_t, 4> b = std::bit_cast<std::array<uint8_t, 4>>(data);
+	std::swap(b[0], b[3]);
+	std::swap(b[1], b[2]);
+	return std::vector<uint8_t>(b.begin(), b.end());
 }

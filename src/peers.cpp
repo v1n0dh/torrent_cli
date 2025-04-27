@@ -50,7 +50,6 @@ bool Peer::connect() {
 
 	_socket.async_connect(endpoint, [&](asio::error_code ec) {
 		if (!ec) {
-			std::cout << "\nConnected to " << this->ip_address << ":" << this->port << "\n";
 			connection_successful = true;
 		}
 		timer.cancel();
@@ -90,6 +89,7 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 	Handshake handshake_from_peer;
 	handshake_from_peer << v_buff;
 
+	// Info hash doesn't match
 	if (hex_bytes_to_string(handshake_from_peer.info_hash) != hex_bytes_to_string(info_hash))
 		return false;
 
