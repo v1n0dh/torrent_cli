@@ -36,11 +36,12 @@ Torrent_File::Torrent_File(const std::string& torrent_file_path) {
 	if (torrent_str[torrent_str.length() - 1] == '\n') torrent_str.pop_back();
 
 	Json::Value bencode_to_json = bencode_decode(torrent_str);
+	std::string pieces = bencode_to_json["info"]["pieces"].asString();
 
 	this->anounce = bencode_to_json["announce"].asString();
 	this->info = new Torrent_Info(bencode_to_json["info"]["length"].asUInt64(),
 								  bencode_to_json["info"]["name"].asString(),
 								  bencode_to_json["info"]["piece length"].asUInt(),
-								  bencode_to_json["info"]["pieces"].asString());
+								  std::vector<uint8_t>(pieces.begin(), pieces.end()));
 	this->info_hash = Torrent_Info::SHA1_info_hash(bencode_encode(bencode_to_json["info"]));
 }

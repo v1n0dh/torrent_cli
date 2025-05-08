@@ -10,9 +10,9 @@ public:
 	uint64_t length;
 	std::string name;
 	uint32_t piece_length;
-	std::string pieces;
+	std::vector<uint8_t> pieces;
 
-	Torrent_Info(uint64_t length, std::string name, uint32_t piece_length, std::string pieces) :
+	Torrent_Info(uint64_t length, std::string name, uint32_t piece_length, const std::vector<uint8_t>& pieces) :
 		length(length), name(name), piece_length(piece_length), pieces(pieces) {}
 
 	static std::vector<uint8_t> SHA1_info_hash(const std::string& info_str);

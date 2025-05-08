@@ -48,9 +48,17 @@ struct Peer {
 	bool connect();
 	bool do_handshake(const std::vector<uint8_t>& info_hash);
 
+	bool send_message(const std::vector<uint8_t>& msg);
+	std::vector<uint8_t> recv_message();
+
+	void set_bitfield(const std::vector<uint8_t>& bitfield);
+	bool piece_available(int index);
+	std::vector<uint8_t> recv_bitfield();
+
 private:
 	asio::io_context _io_context;
 	asio::ip::tcp::socket _socket;
+	std::vector<uint8_t> _bitfield;
 };
 
 #endif

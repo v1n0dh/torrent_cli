@@ -7,11 +7,14 @@
 #include <asio/steady_timer.hpp>
 #include <asm-generic/socket.h>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <system_error>
+#include <vector>
 
+#include "../include/message.hpp"
 #include "../include/peers.hpp"
 #include "../include/utils.hpp"
 
@@ -94,4 +97,70 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 		return false;
 
 	return true;
+}
+
+bool Peer::send_message(const std::vector<uint8_t>& msg) {
+	asio::error_code ec;
+
+	if (!this->_socket.is_open()) return false;
+
+	_socket.write_some(asio::buffer(msg), ec);
+	if (ec) {
+		std::cerr << ec.message();
+		return false;
+	}
+
+	return true;
+}
+
+std::vector<uint8_t> Peer::recv_message() {
+	asio::error_code ec;
+	std::vector<uint8_t> v_buff(4);
+
+	if (!this->_socket.is_open()) return {};
+
+	_socket.read_some(asio::buffer(v_buff), ec);
+	if (ec) {
+		std::cerr << ec.message();
+		return {};
+	}
+	int msg_len = uint8_to_uint32(v_buff);
+
+	v_buff.resize(4 + msg_len);
+	_socket.read_some(asio::buffer(v_buff.data() + 4, v_buff.size() - 4));
+	if (ec) {
+		std::cerr << ec.message();
+		return {};
+	}
+
+	return v_buff;
+}
+
+void Peer::set_bitfield(const std::vector<uint8_t>& bitfield) {
+	this->_bitfield = this->recv_bitfield();
+}
+
+bool Peer::piece_available(int index) {
+	int byte_idx = index / 8;
+	int offset = index % 8;
+
+	if (byte_idx < 0 || byte_idx > _bitfield.size())
+		return false;
+
+	// check if index bit is set
+	return (_bitfield[byte_idx] & (1 << (7 - offset))) != 0;
+}
+
+std::vector<uint8_t> Peer::recv_bitfield() {
+	Message msg;
+
+	std::vector<uint8_t> data = recv_message();
+	msg << data;
+
+	if (msg.id != MessageType::BITFIELD) {
+		std::cerr << "Error: Not Bitfield Message\n";
+		return {};
+	}
+
+	return msg.payload;
 }
