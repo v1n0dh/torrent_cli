@@ -1,27 +1,29 @@
 #include <asio/completion_condition.hpp>
 #include <asio/connect.hpp>
 #include <asio/detail/socket_option.hpp>
+#include <asio/error.hpp>
 #include <asio/error_code.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/socket_base.hpp>
 #include <asio/steady_timer.hpp>
 #include <asm-generic/socket.h>
 #include <chrono>
-#include <cstddef>
+#include <condition_variable>
 #include <cstdint>
 #include <iostream>
 #include <iterator>
+#include <memory>
+#include <mutex>
+#include <sys/socket.h>
 #include <system_error>
 #include <vector>
 
-#include "../include/message.hpp"
 #include "../include/peers.hpp"
 #include "../include/utils.hpp"
 
 std::vector<uint8_t>& Handshake::operator>>(std::vector<uint8_t>& raw_bytes) {
 	raw_bytes.push_back(HANDSHAKE_PSTR_SIZE);
 	raw_bytes.insert(raw_bytes.end(), pstr.begin(), pstr.end());
-
 	// FYI: for reserved bytes in handshake
 	for (int i = 0; i < HANDSHAKE_RESRVE_BYTE_SIZE; i++) raw_bytes.push_back(0);
 
@@ -45,30 +47,48 @@ void Handshake::operator<<(std::vector<uint8_t>& raw_bytes) {
 
 bool Peer::connect() {
 	asio::error_code ec;
-	asio::steady_timer timer(_io_context);
+	auto timer = std::make_shared<asio::steady_timer>(*this->_io_context);
 
-	bool connection_successful = false;
+	auto connection_successful = std::make_shared<bool>(false);
+	auto operation_completed = std::make_shared<bool>(false);
+	auto mtx = std::make_shared<std::mutex>();
+	auto cv = std::make_shared<std::condition_variable>();
 
 	asio::ip::tcp::endpoint endpoint(asio::ip::make_address(this->ip_address, ec), this->port);
 
-	_socket.async_connect(endpoint, [&](asio::error_code ec) {
+	_socket.async_connect(endpoint, [this, timer, connection_successful, operation_completed, mtx, cv](asio::error_code ec) {
+		std::lock_guard<std::mutex> lock(*mtx);
 		if (!ec) {
-			connection_successful = true;
+			*connection_successful = true;
+			this->status = PEER_CONNECTED;
+		} else {
+			*connection_successful = false;
 		}
-		timer.cancel();
+
+		*operation_completed = true;
+		cv->notify_one();
+		timer->cancel();
 	});
 
-	timer.expires_after(std::chrono::seconds(PEER_TIMEOUT));
-	timer.async_wait([&](std::error_code ec) {
-		if (!ec && !connection_successful) {
-			std::cout << "\nConnection Timeout to " << this->ip_address << ":" << this->port << "\n";
-			_socket.cancel();
+	timer->expires_after(std::chrono::seconds(PEER_TIMEOUT));
+	timer->async_wait([this, timer, connection_successful, operation_completed, mtx, cv](std::error_code ec) {
+		if (!ec) {
+			std::lock_guard<std::mutex> lock(*mtx);
+			if (!operation_completed) {
+				_socket.cancel();
+				*connection_successful = false;
+			}
+
+			*operation_completed = true;
+			cv->notify_one();
 		}
 	});
 
-	_io_context.run();
+	// wait until async connect operation completes (or) timer expires
+	std::unique_lock<std::mutex> lock(*mtx);
+	cv->wait(lock, [&]() { return *operation_completed; });
 
-	return connection_successful;
+	return *connection_successful;
 }
 
 bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
@@ -86,6 +106,7 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 	_socket.read_some(asio::buffer(v_buff), ec);
 	if (ec) {
 		std::cerr << ec.message();
+		this->close();
 		return false;
 	}
 
@@ -93,74 +114,70 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 	handshake_from_peer << v_buff;
 
 	// Info hash doesn't match
-	if (hex_bytes_to_string(handshake_from_peer.info_hash) != hex_bytes_to_string(info_hash))
+	if (hex_bytes_to_string(handshake_from_peer.info_hash) != hex_bytes_to_string(info_hash)) {
+		this->close();
 		return false;
+	}
 
 	return true;
 }
 
-bool Peer::send_message(const std::vector<uint8_t>& msg) {
+bool Peer::send_message(Message& msg) {
 	asio::error_code ec;
 
 	if (!this->_socket.is_open()) return false;
 
-	_socket.write_some(asio::buffer(msg), ec);
+	std::vector<uint8_t> v_buff;
+	msg >> v_buff;
+
+	asio::write(_socket, asio::buffer(v_buff), ec);
 	if (ec) {
 		std::cerr << ec.message();
+		this->close();
 		return false;
 	}
 
 	return true;
 }
 
-std::vector<uint8_t> Peer::recv_message() {
-	asio::error_code ec;
-	std::vector<uint8_t> v_buff(4);
-
+Message Peer::recv_message() {
 	if (!this->_socket.is_open()) return {};
 
-	_socket.read_some(asio::buffer(v_buff), ec);
-	if (ec) {
-		std::cerr << ec.message();
-		return {};
-	}
+	asio::error_code ec;
+	asio::steady_timer timer(*this->_io_context);
+
+	timer.expires_after(std::chrono::seconds(30));
+	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
+
+	std::vector<uint8_t> v_buff(4);
+
+	asio::read(_socket, asio::buffer(v_buff), ec);
+	timer.cancel();
+	if (ec) { this->close(); return {}; }
+
 	int msg_len = uint8_to_uint32(v_buff);
-
 	v_buff.resize(4 + msg_len);
-	_socket.read_some(asio::buffer(v_buff.data() + 4, v_buff.size() - 4));
-	if (ec) {
-		std::cerr << ec.message();
-		return {};
-	}
 
-	return v_buff;
-}
+	timer.expires_after(std::chrono::seconds(30));
+	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
 
-void Peer::set_bitfield(const std::vector<uint8_t>& bitfield) {
-	this->_bitfield = this->recv_bitfield();
-}
+	asio::read(_socket, asio::buffer(v_buff.data() + 4, v_buff.size() - 4), ec);
+	timer.cancel();
+	if (ec) { this->close(); return {}; }
 
-bool Peer::piece_available(int index) {
-	int byte_idx = index / 8;
-	int offset = index % 8;
-
-	if (byte_idx < 0 || byte_idx > _bitfield.size())
-		return false;
-
-	// check if index bit is set
-	return (_bitfield[byte_idx] & (1 << (7 - offset))) != 0;
-}
-
-std::vector<uint8_t> Peer::recv_bitfield() {
 	Message msg;
+	msg << v_buff;
 
-	std::vector<uint8_t> data = recv_message();
-	msg << data;
+	if (msg.len == 0) { this->status = PEER_KEEP_ALIVE; }
 
-	if (msg.id != MessageType::BITFIELD) {
-		std::cerr << "Error: Not Bitfield Message\n";
-		return {};
-	}
+	return msg;
+}
 
-	return msg.payload;
+bool Peer::piece_available(int index) { return _bitfield.has_piece(index); }
+
+void Peer::set_bitfield(const std::vector<uint8_t>& bitfield) { this->_bitfield.set(bitfield); }
+
+void Peer::close() {
+	if (this->_socket.is_open()) this->_socket.close();
+	this->status = PEER_DISCONNECTED;
 }

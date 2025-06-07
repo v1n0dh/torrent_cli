@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <math.h>
 #include <iterator>
 #include <vector>
 
@@ -34,9 +35,40 @@ void Message::operator<<(std::vector<uint8_t>& raw_bytes) {
 	// Capture 1st 4 bytes into uint32_t in big endian format
 	this->len = uint8_to_uint32(std::vector<uint8_t>(raw_bytes.begin(), raw_bytes.begin() + 4));
 	// message id = raw_bytes[4]
-	if (raw_bytes_len > 3)
+	if (raw_bytes_len > 4)
 		this->id = raw_bytes[4];
 	// message payload = raw_bytes[5, end]
-	if (raw_bytes_len > 4)
+	if (raw_bytes_len > 5)
 		std::copy(raw_bytes.begin() + 5, raw_bytes.end(), std::back_inserter(this->payload));
+}
+
+Bitfield::Bitfield(int piece_count) {
+	this->bitfield.resize(std::ceil(piece_count / 8));
+	std::fill(bitfield.begin(), bitfield.end(), 0);
+}
+
+void Bitfield::set(const std::vector<uint8_t>& bitfield) { this->bitfield = bitfield; }
+
+bool Bitfield::is_bitfield_set() { return !this->bitfield.empty(); }
+
+void Bitfield::set_piece(int index) {
+	int byte_idx = index / 8;
+	int offset = index % 8;
+
+	if (byte_idx < 0 || byte_idx > this->bitfield.size()) {
+		std::cerr << "Error: Invalid piece index\n";
+		return;
+	}
+
+	this->bitfield[byte_idx] |= (1 << (7 - offset));
+}
+
+bool Bitfield::has_piece(int index) {
+	int byte_idx = index / 8;
+	int offset = index % 8;
+
+	if (byte_idx < 0 || byte_idx > this->bitfield.size())
+		return false;
+
+	return (this->bitfield[byte_idx] & (1 << (7 - offset))) != 0;
 }

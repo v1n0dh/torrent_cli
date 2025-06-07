@@ -45,6 +45,19 @@ struct Piece_Payload {
 		index(index), begin(begin), data(data) {}
 };
 
+struct Bitfield {
+	std::vector<uint8_t> bitfield;
+
+	Bitfield() {}
+	Bitfield(int piece_count);
+
+	void set(const std::vector<uint8_t>& bitfield);
+	bool is_bitfield_set();
+
+	void set_piece(int index);
+	bool has_piece(int index);
+};
+
 typedef std::variant<Have_Payload, Request_Payload, Cancel_Payload, Piece_Payload> MsgPayloadType;
 
 struct Message {

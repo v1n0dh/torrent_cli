@@ -7,7 +7,7 @@ OBJS = $(patsubst $(SRCDIR)/%.cpp, $(BINDIR)/%.o, $(SRCS))
 LIBS = -lssl -lcrypto -ljsoncpp -lcpr
 
 CXX = g++
-CXXFLAGS = -Wall -Wextra -g -std=c++23 -fconcepts-diagnostics-depth=2 -O0 --std=c++23
+CXXFLAGS = -Wall -Wextra -pg -std=c++23 -fconcepts-diagnostics-depth=2 -O0 --std=c++23 -fopenmp -fsanitize=address
 
 TARGET = $(BINDIR)/torrent_cli
 

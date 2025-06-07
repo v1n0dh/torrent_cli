@@ -7,6 +7,7 @@
 #include <sstream>
 #include <cpr/cpr.h>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../include/bencode_parser.hpp"
@@ -29,7 +30,7 @@ std::string Tracker::build_tracker_url(const std::string& peer_id, const std::st
 	return url.str();
 }
 
-std::vector<Peer*> Tracker::extract_peers_from_tracker_resp(const std::string& peers_byts) {
+std::unordered_map<std::string, uint16_t> Tracker::extract_peers_from_tracker_resp(const std::string& peers_byts) {
 	int peer_size = 6;
 	int num_peers = peers_byts.length() / peer_size;
 	if (peers_byts.length() % peer_size != 0) {
@@ -37,12 +38,11 @@ std::vector<Peer*> Tracker::extract_peers_from_tracker_resp(const std::string& p
 		exit(EXIT_FAILURE);
 	}
 
-	std::vector<Peer*> peers;
+	std::unordered_map<std::string, uint16_t> peers;
 	std::vector<uint8_t> peers_vtr = hex_string_to_bytes(peers_byts);
 
 	std::stringstream peer_ss;
 	for (int i = 0; i < num_peers; i++) {
-		asio::ip::address ip_address;
 		int port;
 
 		// 1st four bytes of peer is ip address & last two bytes are port
@@ -59,16 +59,15 @@ std::vector<Peer*> Tracker::extract_peers_from_tracker_resp(const std::string& p
 		// Get the Port Num from the peer list
 		port = peers_vtr[offset+5] | (peers_vtr[offset+4] << 8);
 
-		Peer *peer = new Peer(ip, port);
-		peers.push_back(peer);
+		peers[ip] = port;
 
-		std::cout << "IP: " << std::setw(32) << std::left << ip << "Port: " << port << std::endl;
+		std::cout << "IP: " << std::setw(16) << std::left << ip << "Port: " << port << std::endl;
 	}
 
 	return peers;
 }
 
-std::vector<Peer*> Tracker::send_tracker_req(const std::string& peer_id, const std::string& port) {
+std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::string& peer_id, const std::string& port) {
 	std::string url = build_tracker_url(peer_id, port);
 
 	cpr::Response response = cpr::Get(cpr::Url{url});
@@ -81,6 +80,6 @@ std::vector<Peer*> Tracker::send_tracker_req(const std::string& peer_id, const s
 	Json::Value tracker_resp = bencode_decode(response.text);
 	std::string peers = tracker_resp["peers"].asString();
 
-	std::vector<Peer*> peers_lst = extract_peers_from_tracker_resp(peers);
+	std::unordered_map<std::string, uint16_t> peers_lst = extract_peers_from_tracker_resp(peers);
 	return peers_lst;
 }
