@@ -8,6 +8,7 @@ int main() {
 	client.calculate_pieces();
 	client.pre_allocate_file();
 	client.download_file();
+	client.wait_for_download();
 
 	return 0;
 }

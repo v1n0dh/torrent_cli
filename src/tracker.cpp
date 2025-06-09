@@ -60,8 +60,6 @@ std::unordered_map<std::string, uint16_t> Tracker::extract_peers_from_tracker_re
 		port = peers_vtr[offset+5] | (peers_vtr[offset+4] << 8);
 
 		peers[ip] = port;
-
-		std::cout << "IP: " << std::setw(16) << std::left << ip << "Port: " << port << std::endl;
 	}
 
 	return peers;

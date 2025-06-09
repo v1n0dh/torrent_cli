@@ -5,8 +5,10 @@
 #include <cstdio>
 #include <fcntl.h>
 #include <future>
+#include <memory>
 #include <mutex>
 #include <pthread.h>
+#include <sstream>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -18,6 +20,7 @@
 Torrent_Client::Torrent_Client(const Torrent_File&& file) : _torr_file(file) {}
 
 Torrent_Client::~Torrent_Client() {
+
 	// Kill peers retrival thread
 	_peers_thread_exit_signal.set_value();
 	if (_peers_retrival_thread.joinable()) _peers_retrival_thread.join();
@@ -26,7 +29,9 @@ Torrent_Client::~Torrent_Client() {
 
 	if (_io_ctx_thread.joinable()) _io_ctx_thread.join();
 
-	this->pool.join();
+	this->pool.stop();
+
+	delete this->_bitfield;
 }
 
 void Torrent_Client::start_io_ctx() {
@@ -60,14 +65,12 @@ void Torrent_Client::calculate_pieces() {
 	this->_bitfield = new Bitfield(total_piece_count);
 }
 
-void Torrent_Client::get_peers(Tracker& tracker, std::future<void> _exit_signal_future) {
+void Torrent_Client::get_peers(Tracker&& tracker, std::future<void> _exit_signal_future) {
 	this->_peers_retrival_thread = std::thread(
-		[_exit_signal_future = std::move(_exit_signal_future), &tracker, this] () {
+		[_exit_signal_future = std::move(_exit_signal_future), tracker = std::move(tracker), this] () mutable {
 
 			while (_exit_signal_future.wait_for(std::chrono::milliseconds(1)) == std::future_status::timeout) {
 				pthread_setname_np(pthread_self(), "Tracker thread");
-
-				if (this->_peers_queue.size() > 30) continue;
 
 				std::unordered_map<std::string, uint16_t> peers = tracker.request_peers(PEER_ID, tracker.port);
 
@@ -76,7 +79,7 @@ void Torrent_Client::get_peers(Tracker& tracker, std::future<void> _exit_signal_
 					_peers_queue << peer;
 				}
 
-				std::this_thread::sleep_for(std::chrono::minutes(2));
+				std::this_thread::sleep_for(std::chrono::minutes(1));
 			}
 		});
 }
@@ -110,36 +113,45 @@ void Torrent_Client::download_file() {
 	Tracker tracker(&_torr_file);
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
 
-	this->get_peers(tracker, _peers_thread_exit_signal.get_future());
+	this->get_peers(std::move(tracker), _peers_thread_exit_signal.get_future());
 
-	File_Mapper mapped_file(this->_torr_file.info->name, this->_torr_file.info->length);
+	auto f_mapper = std::make_shared<File_Mapper>(this->_torr_file.info->name, this->_torr_file.info->length);
 
-	while (!_pw_queue.empty()) {
-		asio::post(this->pool, [&]() {
-			if (_pw_queue.empty()) return;
-			Peer* peer = nullptr;
-			_peers_queue >> peer;
+	for (int i = 0; i < MAX_THREADS; i++) {
+		asio::post(this->pool, [this, f_mapper, total_piece_count]() {
 
-			if (peer == nullptr) { delete peer; return; }
+			Peer *peer = nullptr;
 
-			if(!peer->connect()) { delete peer; return; }
-			if(!peer->do_handshake(_torr_file.info_hash))  { delete peer; return; }
+			while (true) {
+				if (_pw_queue.empty()) {
+					break;
+				}
 
-			Piece_Manager pm(&_pw_queue, total_piece_count);
-			Piece_Work pw;
-			_pw_queue >> pw;
+				if (peer == nullptr || peer->status == PEER_DISCONNECTED) {
+					if (peer) { delete peer; peer = nullptr; }
+					_peers_queue >> peer;
 
-			{
-				std::unique_lock<std::mutex> lock(this->_mtx);
-				if (this->_bitfield->has_piece(pw.index)) { delete peer; return; }
+					if (peer == nullptr) continue;
+					if(!peer->connect()) continue;
+					if(!peer->do_handshake(_torr_file.info_hash)) continue;
+				}
+
+				Piece_Manager pm(&_pw_queue, total_piece_count);
+				Piece_Work pw;
+				_pw_queue >> pw;
+
+				{
+					std::unique_lock<std::mutex> lock(this->_mtx);
+					if (this->_bitfield->has_piece(pw.index)) { continue; }
+				}
+
+				if (pm.download_piece(pw, *peer, *f_mapper, this->_torr_file.info->piece_length, this->_mtx)) {
+					std::unique_lock<std::mutex> lock(this->_mtx);
+					_bitfield->set_piece(pw.index);
+				}
 			}
-
-			if (pm.download_piece(pw, *peer, mapped_file, this->_torr_file.info->piece_length)) {
-				std::unique_lock<std::mutex> lock(this->_mtx);
-				_bitfield->set_piece(pw.index);
-			}
-
-			delete peer;
 		});
 	}
 }
+
+void Torrent_Client::wait_for_download() { this->pool.join(); }

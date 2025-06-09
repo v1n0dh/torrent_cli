@@ -14,6 +14,7 @@
 #include "../include/message.hpp"
 
 #define PIECE_HASH_SIZE 20
+#define MAX_THREADS 14
 
 class Torrent_Client {
 public:
@@ -22,9 +23,10 @@ public:
 
 	void calculate_pieces();
 	void start_io_ctx();
-	void get_peers(Tracker& tracker, std::future<void> _exit_signal_future);
+	void get_peers(Tracker&& tracker, std::future<void> _exit_signal_future);
 	bool pre_allocate_file();
 	void download_file();
+	void wait_for_download();
 
 private:
 	Torrent_File _torr_file;
@@ -41,7 +43,7 @@ private:
 	std::thread _peers_retrival_thread;
 	std::promise<void> _peers_thread_exit_signal;
 
-	asio::thread_pool pool{8};
+	asio::thread_pool pool{MAX_THREADS};
 	std::mutex _mtx;
 };
 

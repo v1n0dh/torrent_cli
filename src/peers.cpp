@@ -105,7 +105,6 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 	std::vector<uint8_t> v_buff(handshake_in_bytes.size());
 	_socket.read_some(asio::buffer(v_buff), ec);
 	if (ec) {
-		std::cerr << ec.message();
 		this->close();
 		return false;
 	}
@@ -132,7 +131,6 @@ bool Peer::send_message(Message& msg) {
 
 	asio::write(_socket, asio::buffer(v_buff), ec);
 	if (ec) {
-		std::cerr << ec.message();
 		this->close();
 		return false;
 	}
@@ -146,7 +144,7 @@ Message Peer::recv_message() {
 	asio::error_code ec;
 	asio::steady_timer timer(*this->_io_context);
 
-	timer.expires_after(std::chrono::seconds(30));
+	timer.expires_after(std::chrono::seconds(5));
 	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
 
 	std::vector<uint8_t> v_buff(4);
@@ -158,7 +156,7 @@ Message Peer::recv_message() {
 	int msg_len = uint8_to_uint32(v_buff);
 	v_buff.resize(4 + msg_len);
 
-	timer.expires_after(std::chrono::seconds(30));
+	timer.expires_after(std::chrono::seconds(5));
 	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
 
 	asio::read(_socket, asio::buffer(v_buff.data() + 4, v_buff.size() - 4), ec);

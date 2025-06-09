@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstdint>
+#include <mutex>
 #include <openssl/sha.h>
 #include <sys/types.h>
 #include <thread>
@@ -8,7 +9,7 @@
 #include "../include/piece_manager.hpp"
 #include "../include/utils.hpp"
 
-bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size) {
+bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size, std::mutex& mtx) {
 	if (peer._bitfield.is_bitfield_set() && !peer.piece_available(piece_work.index)) {
 		*pw_queue << piece_work;
 		return false;
@@ -98,7 +99,10 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 		return false;
 	}
 
-	f_mapper.wite_piece(p, piece_size);
+	{
+		std::unique_lock<std::mutex> lock(mtx);
+		f_mapper.wite_piece(p, piece_size);
+	}
 
 	std::cout << "Piece: " << p.index << " downloaded from " << peer.ip_address
 			  << " by thread " << std::this_thread::get_id() << " \n";

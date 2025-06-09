@@ -16,7 +16,7 @@ File_Mapper::File_Mapper(const std::string& file, size_t file_size)
 	}
 
 	data = static_cast<uint8_t*>(mmap(nullptr, this->size - 1, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
-	if (data == MAP_FAILED) {
+	if (data == MAP_FAILED || data == nullptr) {
 		perror("Error in mapping file\n");
 		close(this->fd);
 		exit(-1);
@@ -37,6 +37,6 @@ void File_Mapper::wite_piece(const Piece& piece, size_t piece_size) {
 
 	for (Block* block : piece.blocks) {
 		size_t blk_offset = block->offset * BLOCK_SIZE;
-		std::memcpy(data + p_offset + blk_offset, block->data.data(), block->length);
+		std::memcpy(this->data + p_offset + blk_offset, block->data.data(), block->length);
 	}
 }

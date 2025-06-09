@@ -44,6 +44,10 @@ struct Piece {
 
 	Piece(int index, int piece_len);
 	~Piece();
+
+	Piece(const Piece&) = delete;
+	Piece& operator=(const Piece&) = delete;
+
 	// Returns -1 if all the blocks are recieved
 	int next_block();
 	bool is_completed();
@@ -67,7 +71,7 @@ public:
 	Piece_Manager(Shared_Queue<Piece_Work>* work_queue, int piece_count)
 		: pw_queue(work_queue), total_piece_count(piece_count) {}
 
-	bool download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size);
+	bool download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size, std::mutex& mtx);
 	bool check_piece_hash(const Piece& p, const std::vector<uint8_t>& hash);
 
 private:
