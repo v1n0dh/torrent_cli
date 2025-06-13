@@ -56,6 +56,8 @@ struct Bitfield {
 
 	void set_piece(int index);
 	bool has_piece(int index);
+
+	bool all_pieces_set(int piece_count);
 };
 
 typedef std::variant<Have_Payload, Request_Payload, Cancel_Payload, Piece_Payload> MsgPayloadType;

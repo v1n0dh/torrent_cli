@@ -10,10 +10,8 @@
 #include "../include/utils.hpp"
 
 bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size, std::mutex& mtx) {
-	if (peer._bitfield.is_bitfield_set() && !peer.piece_available(piece_work.index)) {
-		*pw_queue << piece_work;
+	if (peer._bitfield.is_bitfield_set() && !peer.piece_available(piece_work.index))
 		return false;
-	}
 
 	Piece p(piece_work.index, piece_work.piece_len);
 	int curr_offset = piece_work.offset;
@@ -38,7 +36,6 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 
 				if (!peer.send_message(rqst_msg)) {
 					piece_work.offset = curr_offset;
-					*pw_queue << piece_work;
 					return false;
 				}
 
@@ -49,8 +46,11 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 		}
 
 		Message msg = peer.recv_message();
-		if (peer.status == PEER_KEEP_ALIVE) continue;
-		if (peer.status == PEER_DISCONNECTED) break;
+		if (peer.status == PEER_DISCONNECTED) return false;
+		if (peer.status == PEER_KEEP_ALIVE) {
+			std::this_thread::sleep_for(std::chrono::milliseconds(50));
+			continue;
+		}
 
 		switch (msg.id) {
 			case MessageType::CHOKE:
@@ -73,8 +73,8 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 					std::get<Piece_Payload>(Message::parse_payload<MessageType::PIECE>(msg.payload));
 
 				int block_idx = payload.begin / BLOCK_SIZE;
-				if (block_idx < 0 || block_idx > p.num_blocks)
-					break;
+				if (block_idx < 0 || block_idx >= p.num_blocks)
+					return false;
 
 				if (p.blocks[block_idx]->status == BLOCK_RECEIVED)
 					break;
@@ -84,18 +84,17 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 				p.blocks[block_idx]->status = BLOCK_RECEIVED;
 
 				backlog_requests--;
+
+				break;
 			}
 		}
 	}
 
-	if (!p.is_completed()) {
-		*pw_queue << piece_work;
-		return false;
-	}
+	if (!p.is_completed()) return false;
 
 	if (!check_piece_hash(p, piece_work.piece_hash)) {
 		std::cerr << "PIECE Hash doesn't match Piece: " << p.index << "\n";
-		*pw_queue << piece_work;
+		peer.close();
 		return false;
 	}
 

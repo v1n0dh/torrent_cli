@@ -43,7 +43,7 @@ void Message::operator<<(std::vector<uint8_t>& raw_bytes) {
 }
 
 Bitfield::Bitfield(int piece_count) {
-	this->bitfield.resize(std::ceil(piece_count / 8));
+	this->bitfield.resize(std::ceil(piece_count / 8) + 1);
 	std::fill(bitfield.begin(), bitfield.end(), 0);
 }
 
@@ -71,4 +71,13 @@ bool Bitfield::has_piece(int index) {
 		return false;
 
 	return (this->bitfield[byte_idx] & (1 << (7 - offset))) != 0;
+}
+
+bool Bitfield::all_pieces_set(int piece_count) {
+	int i = 0;
+	while (i++ < piece_count) {
+		if (!this->has_piece(i))
+			return false;
+	}
+	return true;
 }

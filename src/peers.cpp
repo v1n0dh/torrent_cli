@@ -94,7 +94,7 @@ bool Peer::connect() {
 bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 	asio::error_code ec;
 
-	if (!this->_socket.is_open()) return false;
+	if (!this->_socket.is_open()) { this->close(); return {}; }
 
 	std::vector<uint8_t> handshake_in_bytes;
 	Handshake handshake(info_hash);
@@ -124,7 +124,7 @@ bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
 bool Peer::send_message(Message& msg) {
 	asio::error_code ec;
 
-	if (!this->_socket.is_open()) return false;
+	if (!this->_socket.is_open()) { this->close(); return false; }
 
 	std::vector<uint8_t> v_buff;
 	msg >> v_buff;
@@ -139,7 +139,7 @@ bool Peer::send_message(Message& msg) {
 }
 
 Message Peer::recv_message() {
-	if (!this->_socket.is_open()) return {};
+	if (!this->_socket.is_open()) { this->close(); return {}; }
 
 	asio::error_code ec;
 	asio::steady_timer timer(*this->_io_context);

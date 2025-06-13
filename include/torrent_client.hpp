@@ -14,7 +14,7 @@
 #include "../include/message.hpp"
 
 #define PIECE_HASH_SIZE 20
-#define MAX_THREADS 14
+#define MAX_THREADS 16
 
 class Torrent_Client {
 public:
@@ -45,6 +45,8 @@ private:
 
 	asio::thread_pool pool{MAX_THREADS};
 	std::mutex _mtx;
+
+	std::atomic<int> completed_pieces = 0;
 };
 
 #endif

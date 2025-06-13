@@ -40,3 +40,8 @@ void File_Mapper::wite_piece(const Piece& piece, size_t piece_size) {
 		std::memcpy(this->data + p_offset + blk_offset, block->data.data(), block->length);
 	}
 }
+
+void File_Mapper::flush() {
+	if (data != nullptr)
+		msync(this->data, this->size, MS_SYNC);
+}

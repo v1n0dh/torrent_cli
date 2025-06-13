@@ -7,6 +7,7 @@
 #include <queue>
 #include <shared_mutex>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -45,6 +46,16 @@ public:
 		std::unique_lock<std::mutex> _lock(_mutex);
 		return _queue.empty();
 	}
+
+	void clean() {
+		std::unique_lock<std::mutex> _lock(_mutex);
+		while (!this->_queue.empty()) {
+			if constexpr (std::is_pointer<T>::value)
+				delete this->_queue.front();
+			this->_queue.pop();
+		}
+	}
+
 
 private:
 	std::queue<T> _queue;

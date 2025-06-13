@@ -64,6 +64,7 @@ public:
 	~File_Mapper();
 
 	void wite_piece(const Piece& piece, size_t piece_size);
+	void flush();
 };
 
 class Piece_Manager {
