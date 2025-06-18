@@ -1,8 +1,8 @@
 #include <asio/ip/address.hpp>
+#include <cpr/response.h>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <iomanip>
 #include <json/value.h>
 #include <sstream>
 #include <cpr/cpr.h>
@@ -14,10 +14,10 @@
 #include "../include/tracker.hpp"
 #include "../include/utils.hpp"
 
-std::string Tracker::build_tracker_url(const std::string& peer_id, const std::string& port) {
+std::string Tracker::build_tracker_url(const std::string& tracker_url, const std::string& peer_id, const std::string& port) {
 	std::stringstream url;
 
-	url << torrent->anounce << '?';
+	url << tracker_url << '?';
 	url << "info_hash=" << url_encode_hash(hex_bytes_to_string(torrent->info_hash))  << '&';
 	url << "peer_id=" << peer_id << '&';
 	url << "port=" << port << '&';
@@ -66,13 +66,36 @@ std::unordered_map<std::string, uint16_t> Tracker::extract_peers_from_tracker_re
 }
 
 std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::string& peer_id, const std::string& port) {
-	std::string url = build_tracker_url(peer_id, port);
+	cpr::Response response;
 
-	cpr::Response response = cpr::Get(cpr::Url{url});
+	if (!torrent->announce_list.empty()) {
+		int num_tracker_urls = torrent->announce_list.size();
+		while (--num_tracker_urls >= 0) {
+			std::string tracker_url = torrent->announce_list.front();
+			torrent->announce_list.pop_front();
+			// If tracker url is UDP, skip for now
+			if (tracker_url.compare(0, 4, "http") != 0)
+				continue;
 
-	if (response.status_code != 200) {
-		std::cerr << std::strerror(errno) << " Could not send tracker request\n";
-		exit(EXIT_FAILURE);
+			std::string url = build_tracker_url(tracker_url, peer_id, port);
+
+			response = cpr::Get(cpr::Url{url});
+
+			if (response.status_code != 200) {
+				std::cerr << std::strerror(errno) << "; Could not send tracker request to " << tracker_url << "\n";
+				torrent->announce_list.push_back(tracker_url);
+			} else
+				torrent->announce_list.push_front(tracker_url);
+		}
+	} else if (!torrent->announce.empty()) {
+			std::string url = build_tracker_url(torrent->announce, peer_id, port);
+
+			response = cpr::Get(cpr::Url{url});
+
+			if (response.status_code != 200) {
+				std::cerr << std::strerror(errno) << "; Could not send tracker request to " << torrent->announce << "\n";
+				exit(EXIT_FAILURE);
+			}
 	}
 
 	Json::Value tracker_resp = bencode_decode(response.text);

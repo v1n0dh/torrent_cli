@@ -27,7 +27,7 @@ public:
 private:
 	const std::vector<std::string> _tracker_event_str{"started", "stopped", "completed"};
 
-	std::string build_tracker_url(const std::string& peer_id, const std::string& port);
+	std::string build_tracker_url(const std::string& tracker_url, const std::string& peer_id, const std::string& port);
 	std::unordered_map<std::string, uint16_t> extract_peers_from_tracker_resp(const std::string& peers_byts);
 };
 

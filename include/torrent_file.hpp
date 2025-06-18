@@ -2,6 +2,7 @@
 #define TORRENT_FILE_HPP
 
 #include <cstdint>
+#include <deque>
 #include <iostream>
 #include <vector>
 
@@ -20,7 +21,8 @@ public:
 
 class Torrent_File {
 public:
-	std::string anounce;
+	std::string announce;
+	std::deque<std::string> announce_list;
 	Torrent_Info* info;
 	std::vector<uint8_t> info_hash;
 

@@ -1,7 +1,6 @@
 #ifndef _BENCODE_PARSER_
 #define _BENCODE_PARSER_
 
-#include <iostream>
 #include <json/json.h>
 
 static const char BENCODE_BEGIN_DICT = 'd';
@@ -10,7 +9,7 @@ static const char BENCODE_BEGIN_INT = 'i';
 static const char BENCODE_BEGIN_STRING = ':';
 static const char BENCODE_END_DATA = 'e';
 
-int bencode_decode_int(const std::string &torr_str);
+long long int bencode_decode_int(const std::string &torr_str);
 std::string bencode_decode_str(const std::string &torr_str);
 Json::Value bencode_decode(const std::string &torr_str);
 Json::Value bencode_decode_list(const std::string &torr_str);
