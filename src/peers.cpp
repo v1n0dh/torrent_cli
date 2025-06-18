@@ -3,19 +3,18 @@
 #include <asio/detail/socket_option.hpp>
 #include <asio/error.hpp>
 #include <asio/error_code.hpp>
+#include <asio/ip/address.hpp>
 #include <asio/ip/tcp.hpp>
 #include <asio/socket_base.hpp>
 #include <asio/steady_timer.hpp>
 #include <asm-generic/socket.h>
+#include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
-#include <iostream>
+#include <future>
 #include <iterator>
 #include <memory>
-#include <mutex>
 #include <sys/socket.h>
-#include <system_error>
 #include <vector>
 
 #include "../include/peers.hpp"
@@ -47,48 +46,33 @@ void Handshake::operator<<(std::vector<uint8_t>& raw_bytes) {
 
 bool Peer::connect() {
 	asio::error_code ec;
-	auto timer = std::make_shared<asio::steady_timer>(*this->_io_context);
+	asio::steady_timer timer(*this->_io_context);
 
-	auto connection_successful = std::make_shared<bool>(false);
-	auto operation_completed = std::make_shared<bool>(false);
-	auto mtx = std::make_shared<std::mutex>();
-	auto cv = std::make_shared<std::condition_variable>();
+	auto conn_successful = std::make_shared<std::promise<bool>>();
+	std::future<bool> conn_result_fut = conn_successful->get_future();
+	auto promise_set = std::make_shared<std::atomic<bool>>(false);
 
 	asio::ip::tcp::endpoint endpoint(asio::ip::make_address(this->ip_address, ec), this->port);
 
-	_socket.async_connect(endpoint, [this, timer, connection_successful, operation_completed, mtx, cv](asio::error_code ec) {
-		std::lock_guard<std::mutex> lock(*mtx);
-		if (!ec) {
-			*connection_successful = true;
-			this->status = PEER_CONNECTED;
-		} else {
-			*connection_successful = false;
-		}
-
-		*operation_completed = true;
-		cv->notify_one();
-		timer->cancel();
+	timer.expires_after(std::chrono::seconds(PEER_TIMEOUT));
+	timer.async_wait([this, conn_successful, promise_set](const asio::error_code& ec) {
+		if (!ec && !promise_set->exchange(true)) { this->close(); conn_successful->set_value(false); }
 	});
 
-	timer->expires_after(std::chrono::seconds(PEER_TIMEOUT));
-	timer->async_wait([this, timer, connection_successful, operation_completed, mtx, cv](std::error_code ec) {
-		if (!ec) {
-			std::lock_guard<std::mutex> lock(*mtx);
-			if (!operation_completed) {
-				_socket.cancel();
-				*connection_successful = false;
+	_socket.async_connect(endpoint,
+						  [this, conn_successful, promise_set, &timer] (const asio::error_code& ec) {
+		if (!promise_set->exchange(true)) {
+			timer.cancel();
+			if (!ec) {
+				conn_successful->set_value(true);
+				this->status = PEER_CONNECTED;
+			} else {
+				conn_successful->set_value(false);
 			}
-
-			*operation_completed = true;
-			cv->notify_one();
 		}
 	});
 
-	// wait until async connect operation completes (or) timer expires
-	std::unique_lock<std::mutex> lock(*mtx);
-	cv->wait(lock, [&]() { return *operation_completed; });
-
-	return *connection_successful;
+	return conn_result_fut.get();
 }
 
 bool Peer::do_handshake(const std::vector<uint8_t>& info_hash) {
@@ -142,26 +126,60 @@ Message Peer::recv_message() {
 	if (!this->_socket.is_open()) { this->close(); return {}; }
 
 	asio::error_code ec;
-	asio::steady_timer timer(*this->_io_context);
 
-	timer.expires_after(std::chrono::seconds(5));
-	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
+	auto timer_1 = std::make_shared<asio::steady_timer>(*this->_io_context);
+	auto operation_successful_1 = std::make_shared<std::promise<bool>>();
+	auto operation_result_fut_1 = operation_successful_1->get_future();
+	auto promise_set_1 = std::make_shared<std::atomic<bool>>(false);
+
+	timer_1->expires_after(std::chrono::seconds(5));
+	timer_1->async_wait([this, operation_successful_1, promise_set_1](const asio::error_code& ec) {
+		if (!ec && !promise_set_1->exchange(true)) { this->close(); operation_successful_1->set_value(false); }
+	});
 
 	std::vector<uint8_t> v_buff(4);
 
-	asio::read(_socket, asio::buffer(v_buff), ec);
-	timer.cancel();
-	if (ec) { this->close(); return {}; }
+	asio::async_read(_socket, asio::buffer(v_buff), [this, operation_successful_1, promise_set_1, timer_1]
+					 (const asio::error_code& ec, size_t bytes_transferred) {
+		if (!promise_set_1->exchange(true)) {
+			if (!ec) {
+				operation_successful_1->set_value(true);
+				timer_1->cancel();
+			} else {
+				operation_successful_1->set_value(false);
+				this->close();
+			}
+		}
+	});
+	if (!operation_result_fut_1.get()) return {};
 
 	int msg_len = uint8_to_uint32(v_buff);
 	v_buff.resize(4 + msg_len);
 
-	timer.expires_after(std::chrono::seconds(5));
-	timer.async_wait([&](const asio::error_code& ec) { if (!ec) this->close(); });
+	auto timer_2 = std::make_shared<asio::steady_timer>(*this->_io_context);
+	auto operation_successful_2 = std::make_shared<std::promise<bool>>();
+	auto operation_result_fut_2 = operation_successful_2->get_future();
+	auto promise_set_2 = std::make_shared<std::atomic<bool>>(false);
 
-	asio::read(_socket, asio::buffer(v_buff.data() + 4, v_buff.size() - 4), ec);
-	timer.cancel();
-	if (ec) { this->close(); return {}; }
+	timer_2->expires_after(std::chrono::seconds(5));
+	timer_2->async_wait([this, operation_successful_2, promise_set_2](const asio::error_code& ec) {
+		if (!ec && !promise_set_2->exchange(true)) { this->close(); operation_successful_2->set_value(false); }
+	});
+
+	asio::async_read(_socket, asio::buffer(v_buff.data() + 4, msg_len),
+					 [this, operation_successful_2, promise_set_2, timer_2]
+					 (const asio::error_code& ec, size_t bytes_transferred) {
+		if (!promise_set_2->exchange(true)) {
+			if (!ec) {
+				operation_successful_2->set_value(true);
+				timer_2->cancel();
+			} else {
+				operation_successful_2->set_value(false);
+				this->close();
+			}
+		}
+	});
+	if (!operation_result_fut_2.get()) return {};
 
 	Message msg;
 	msg << v_buff;

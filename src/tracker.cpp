@@ -71,7 +71,7 @@ std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::stri
 	cpr::Response response = cpr::Get(cpr::Url{url});
 
 	if (response.status_code != 200) {
-		std::cerr << std::strerror(errno) << "Could not send tracker request\n";
+		std::cerr << std::strerror(errno) << " Could not send tracker request\n";
 		exit(EXIT_FAILURE);
 	}
 

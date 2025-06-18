@@ -9,12 +9,11 @@
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "../include/message.hpp"
 
-#define PEER_ID "-VB0001-lDaFog8xBTH1"
+#define PEER_ID "-VB0001-lDaFog8xBVX3"
 
 #define PEER_TIMEOUT 3
 

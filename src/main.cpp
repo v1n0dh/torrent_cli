@@ -1,7 +1,17 @@
+#include <cstdlib>
+
 #include "../include/torrent_client.hpp"
 
-int main() {
-	Torrent_File file("debian.torrent");
+int main(int argc, char** argv) {
+	if (argc < 2) {
+		std::cerr << "Usage: ";
+		std::cerr << argv[0] << " file.torrent\n\n";
+		exit(1);
+	}
+
+	std::string torrent_file(argv[1]);
+
+	Torrent_File file(torrent_file);
 
 	Torrent_Client client(std::move(file));
 	client.start_io_ctx();

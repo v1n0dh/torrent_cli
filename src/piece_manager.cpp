@@ -1,15 +1,21 @@
 #include <cmath>
 #include <cstdint>
+#include <iostream>
 #include <mutex>
 #include <openssl/sha.h>
 #include <sys/types.h>
 #include <thread>
+#include <vector>
 
 #include "../include/message.hpp"
 #include "../include/piece_manager.hpp"
 #include "../include/utils.hpp"
 
-bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapper& f_mapper, size_t piece_size, std::mutex& mtx) {
+bool Piece_Manager::download_piece(Piece_Work& piece_work,
+								   Peer& peer,
+								   File_Mapper& f_mapper,
+								   size_t piece_size,
+								   std::mutex& mtx) {
 	if (peer._bitfield.is_bitfield_set() && !peer.piece_available(piece_work.index))
 		return false;
 
@@ -107,6 +113,47 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work, Peer& peer, File_Mapp
 			  << " by thread " << std::this_thread::get_id() << " \n";
 
 	return true;
+}
+
+void Piece_Manager::download_last_pieces(std::vector<Piece_Work> piece_works,
+										 std::vector<Peer*> peers,
+										 File_Mapper& f_mapper,
+										 std::vector<uint8_t>& info_hash,
+										 size_t piece_size,
+										 Bitfield* bitfield,
+										 std::atomic<int>* completed_pieces,
+										 std::mutex& _cancel_mtx) {
+	for (Piece_Work& piece_work : piece_works) {
+		std::atomic<bool> completed = false;
+
+		for (Peer* peer : peers) {
+			if (peer->_bitfield.is_bitfield_set() && !peer->piece_available(piece_work.index)) continue;
+
+			std::thread([&] () {
+				if (peer->status == PEER_DISCONNECTED) {
+					if (!peer->connect() || !peer->do_handshake(info_hash))
+						return;
+				}
+				bool success = this->download_piece(piece_work, *peer, f_mapper, piece_size, _cancel_mtx);
+
+				if (success && !completed.exchange(true)) {
+					{
+						std::unique_lock<std::mutex> _lock(_cancel_mtx);
+						bitfield->set_piece(piece_work.index);
+						completed_pieces->fetch_add(1);
+					}
+
+					std::unique_lock<std::mutex> _lock(_cancel_mtx);
+					for (Peer* peer : peers){
+						std::vector<uint8_t> cancel_payload = Message::create_payload<MessageType::CANCEL>(
+							piece_work.index, 0, BLOCK_SIZE);
+						Message cancel_msg = Message(MessageType::CANCEL, cancel_payload);
+						peer->send_message(cancel_msg);
+					}
+				}
+			}).detach();
+		}
+	}
 }
 
 bool Piece_Manager::check_piece_hash(const Piece& p, const std::vector<uint8_t>& hash) {

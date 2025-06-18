@@ -48,7 +48,7 @@ struct Piece_Payload {
 struct Bitfield {
 	std::vector<uint8_t> bitfield;
 
-	Bitfield() {}
+	Bitfield() { bitfield.clear(); }
 	Bitfield(int piece_count);
 
 	void set(const std::vector<uint8_t>& bitfield);

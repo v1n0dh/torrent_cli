@@ -73,12 +73,13 @@ void Torrent_Client::get_peers(Tracker&& tracker, std::future<void> _exit_signal
 
 			while (_exit_signal_future.wait_for(std::chrono::milliseconds(5)) == std::future_status::timeout) {
 
-				if (this->_peers_queue.size() > 30) continue;
+				if (_peers_queue.size() > 30) continue;
 
 				std::unordered_map<std::string, uint16_t> peers = tracker.request_peers(PEER_ID, tracker.port);
 
+				Peer* peer;
 				for (auto p : peers) {
-					Peer* peer = new Peer(p.first, p.second, &_global_io_ctx);
+					peer = new Peer(p.first, p.second, &_global_io_ctx);
 					_peers_queue << peer;
 				}
 			}
@@ -113,23 +114,24 @@ bool Torrent_Client::pre_allocate_file() {
 void Torrent_Client::download_file() {
 	Tracker tracker(&_torr_file);
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
+
 	auto f_mapper = std::make_shared<File_Mapper>(this->_torr_file.info->name, this->_torr_file.info->length);
 
 	this->get_peers(std::move(tracker), _peers_thread_exit_signal.get_future());
 
 	for (int i = 0; i < MAX_THREADS; i++) {
 		asio::post(this->pool, [this, f_mapper, total_piece_count]() {
-
-			Peer *peer = nullptr;
 			Piece_Work pw;
 			Piece_Manager pm(&_pw_queue, total_piece_count);
-			bool existing_piece = false;
+			Peer *peer = nullptr;
 
 			while (true) {
+				bool existing_piece = false;
+
 				_pw_queue >> pw;
 
 				// If got poison piece, then break
-				if (pw.index == -1) break;
+				if (pw.index == -1) { delete peer; peer = nullptr; break; }
 
 				{
 					std::unique_lock<std::mutex> lock(this->_mtx);
@@ -144,6 +146,8 @@ void Torrent_Client::download_file() {
 
 					if(!peer->connect() || !peer->do_handshake(_torr_file.info_hash)) {
 						_pw_queue << pw;
+						delete peer;
+						peer = nullptr;
 						continue;
 					}
 				}
