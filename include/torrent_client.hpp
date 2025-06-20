@@ -24,9 +24,9 @@ public:
 	void calculate_pieces();
 	void start_io_ctx();
 	void get_peers(Tracker&& tracker, std::future<void> _exit_signal_future);
-	bool pre_allocate_file();
-	void download_file();
-	void wait_for_download();
+	bool pre_allocate_file(std::string& file_path);
+	void download_file(std::string& file_path);
+	void wait_for_download(std::string& file_path);
 
 private:
 	Torrent_File _torr_file;

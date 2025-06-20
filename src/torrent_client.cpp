@@ -86,8 +86,9 @@ void Torrent_Client::get_peers(Tracker&& tracker, std::future<void> _exit_signal
 		});
 }
 
-bool Torrent_Client::pre_allocate_file() {
-	std::string file_path = this->_torr_file.info->name;
+bool Torrent_Client::pre_allocate_file(std::string& file_path) {
+	if (file_path.empty())
+		file_path = this->_torr_file.info->name;
 	size_t file_size = this->_torr_file.info->length;
 
 	int fd = open(file_path.c_str(), O_RDWR | O_CREAT, 0666);
@@ -111,11 +112,12 @@ bool Torrent_Client::pre_allocate_file() {
 	return true;
 }
 
-void Torrent_Client::download_file() {
+void Torrent_Client::download_file(std::string& file_path) {
 	Tracker tracker(&_torr_file);
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
+	if (file_path.empty()) file_path = this->_torr_file.info->name;
 
-	auto f_mapper = std::make_shared<File_Mapper>(this->_torr_file.info->name, this->_torr_file.info->length);
+	auto f_mapper = std::make_shared<File_Mapper>(file_path, this->_torr_file.info->length);
 
 	this->get_peers(std::move(tracker), _peers_thread_exit_signal.get_future());
 
@@ -164,9 +166,10 @@ void Torrent_Client::download_file() {
 	}
 }
 
-void Torrent_Client::wait_for_download() {
+void Torrent_Client::wait_for_download(std::string& file_path) {
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
-	auto f_mapper = std::make_shared<File_Mapper>(this->_torr_file.info->name, this->_torr_file.info->length);
+	if (file_path.empty()) file_path = this->_torr_file.info->name;
+	auto f_mapper = std::make_shared<File_Mapper>(file_path, this->_torr_file.info->length);
 
 	std::thread completion_watcher([this, total_piece_count]() {
 		pthread_setname_np(pthread_self(), "Exit thread");

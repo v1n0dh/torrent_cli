@@ -1,24 +1,40 @@
 #include <cstdlib>
+#include <cxxopts.hpp>
 
 #include "../include/torrent_client.hpp"
 
 int main(int argc, char** argv) {
-	if (argc < 2) {
-		std::cerr << "Usage: ";
-		std::cerr << argv[0] << " file.torrent\n\n";
-		exit(1);
+	cxxopts::Options options("torrent_cli", "Example Usage of torrent_cli command");
+	options.add_options()
+		("h,help", "Print Usage")
+		("t,torrent-file", ".torrent file input location", cxxopts::value<std::string>())
+		("f,out-file", "destination file location", cxxopts::value<std::string>());
+
+	auto result = options.parse(argc, argv);
+
+	if (result.count("help")) {
+		std::cout << options.help() << "\n";
+		return 0;
 	}
 
-	std::string torrent_file(argv[1]);
+	if (!result.count("torrent-file")) {
+		std::cerr << "torrent_cli -t <.torrent file>\n";
+		std::cout << options.help() << "\n";
+		exit(EXIT_FAILURE);
+	}
 
-	Torrent_File file(torrent_file);
+	std::string out_file_path;
+	if (result.count("out-file"))
+		out_file_path = result["out-file"].as<std::string>();
+
+	Torrent_File file(result["torrent-file"].as<std::string>());
 
 	Torrent_Client client(std::move(file));
 	client.start_io_ctx();
 	client.calculate_pieces();
-	client.pre_allocate_file();
-	client.download_file();
-	client.wait_for_download();
+	client.pre_allocate_file(out_file_path);
+	client.download_file(out_file_path);
+	client.wait_for_download(out_file_path);
 
 	return 0;
 }
