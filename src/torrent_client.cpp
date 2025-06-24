@@ -52,7 +52,7 @@ void Torrent_Client::calculate_pieces() {
 
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
 
-	log << LOG_INFO << "Calculating piece count\n";
+	log << LOG_INFO << "Calculating piece count" << std::endl;
 
 	#pragma omp parallel for
 	for (int piece_index = 0; piece_index < total_piece_count; piece_index++) {
@@ -169,7 +169,7 @@ void Torrent_Client::download_file(std::string& file_path) {
 					this->completed_pieces.fetch_add(1);
 
 					(*log) << LOG_INFO << "(Progress: " << std::fixed << std::setprecision(2)
-						   << get_piece_progress(total_piece_count) << "% ) Piece# " << pw.index << " recieved"
+						   << get_piece_progress(total_piece_count) << "% ) Piece# " << pw.index << " recieved "
 						   << "from Thread ID: " << std::this_thread::get_id() << std::endl;
 				} else {
 					_pw_queue << pw;
@@ -208,7 +208,7 @@ void Torrent_Client::wait_for_download(std::string& file_path) {
 
 	f_mapper->flush();
 
-	log << LOG_INFO << "Downloading " << file_path << " completed" << std::endl;
+	log << LOG_INFO << "Downloading " << file_path << " completed!!" << std::endl;
 }
 
 float Torrent_Client::get_piece_progress(const int total_piece_count) {

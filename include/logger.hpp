@@ -15,6 +15,13 @@ enum Log_Level {
 		(level) == LOG_WARN ? "WARN" : \
 		(level) == LOG_ERROR ? "ERROR" : "UNKNOWN")
 
+#define LOG_LEVEL_COLOR(level) \
+	((level) == LOG_INFO ? "\033[32m" :    \
+		(level) == LOG_WARN ? "\033[33m" : \
+		(level) == LOG_ERROR ? "\033[31m" : "\033[0m")
+
+#define COLOR_RESET "\033[0m"
+
 class Logger {
 public:
 	Logger(std::ostream& out_stream = std::cout) : _out_stream(out_stream) {}
@@ -30,16 +37,11 @@ public:
 			time_t curr_time = std::time(nullptr);
 			char buff[64];
 			std::strftime(buff, sizeof(buff), "%Y-%m-%d %H:%M:%S", std::localtime(&curr_time));
-			_out_stream << "[" << buff << "] [" << LOG_LEVEL_TO_STR(_level) << "] ";
+			_out_stream << "[" << buff << "] "<< LOG_LEVEL_COLOR(_level) << "[" << LOG_LEVEL_TO_STR(_level) << "] ";
 			_prefix_pos = false;
 		}
 
 		_out_stream << value;
-
-		if constexpr(std::is_same_v<T, const char*>) {
-			if (std::string(value).back() == '\n')
-				_prefix_pos = true;
-		}
 
 		return *this;
 	}
@@ -48,8 +50,10 @@ public:
 		_out_stream << manip;
 
 		if (manip == static_cast<std::ostream& (*)(std::ostream&)>(std::endl) ||
-			manip == static_cast<std::ostream& (*)(std::ostream&)>(std::flush))
+			manip == static_cast<std::ostream& (*)(std::ostream&)>(std::flush)) {
 			_prefix_pos = true;
+			_out_stream << COLOR_RESET;
+		}
 
 		return *this;
 	}
