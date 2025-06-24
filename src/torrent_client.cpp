@@ -130,6 +130,8 @@ void Torrent_Client::download_file(std::string& file_path) {
 
 	this->get_peers(std::move(tracker), _peers_thread_exit_signal.get_future());
 
+	(*log) << LOG_INFO << "Started downloading pieces (" << total_piece_count << ").." << std::endl;
+
 	for (int i = 0; i < MAX_THREADS; i++) {
 		asio::post(this->pool, [this, f_mapper, total_piece_count, log]() {
 			Piece_Work pw;
@@ -174,6 +176,7 @@ void Torrent_Client::download_file(std::string& file_path) {
 				} else {
 					_pw_queue << pw;
 
+					std::unique_lock<std::mutex> lock(this->_mtx);
 					(*log) << LOG_WARN << "Piece# " << pw.index << " not completed. Adding back to Queue"
 						   << std::endl;
 				}

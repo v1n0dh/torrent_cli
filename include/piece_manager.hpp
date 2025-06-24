@@ -79,14 +79,7 @@ public:
 						File_Mapper& f_mapper,
 						size_t piece_size,
 						std::mutex& mtx);
-	void download_last_pieces(std::vector<Piece_Work> piece_works,
-							  std::vector<Peer*> peers,
-							  File_Mapper& f_mapper,
-							  std::vector<uint8_t>& info_hash,
-							  size_t piece_size,
-							  Bitfield* bitfield,
-							  std::atomic<int>* completed_pieces,
-							  std::mutex& mtx);
+
 	bool check_piece_hash(const Piece& p, const std::vector<uint8_t>& hash);
 
 private:

@@ -1,8 +1,8 @@
 #include <cstdlib>
 #include <cxxopts.hpp>
 
-#include "../include/torrent_client.hpp"
 #include "../include/logger.hpp"
+#include "../include/torrent_client.hpp"
 
 int main(int argc, char** argv) {
 	Logger log(std::cout);
