@@ -2,8 +2,11 @@
 #include <cxxopts.hpp>
 
 #include "../include/torrent_client.hpp"
+#include "../include/logger.hpp"
 
 int main(int argc, char** argv) {
+	Logger log(std::cout);
+
 	cxxopts::Options options("torrent_cli", "Example Usage of torrent_cli command");
 	options.add_options()
 		("h,help", "Print Usage")
@@ -18,7 +21,7 @@ int main(int argc, char** argv) {
 	}
 
 	if (!result.count("torrent-file")) {
-		std::cerr << "torrent_cli -t <.torrent file>\n";
+		log << LOG_ERROR << "torrent_cli -t <.torrent file>\n";
 		std::cout << options.help() << "\n";
 		exit(EXIT_FAILURE);
 	}

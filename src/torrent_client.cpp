@@ -1,10 +1,12 @@
 #include <asio/executor_work_guard.hpp>
 #include <asio/io_context.hpp>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <fcntl.h>
 #include <future>
+#include <iomanip>
 #include <memory>
 #include <mutex>
 #include <pthread.h>
@@ -15,6 +17,7 @@
 #include "../include/torrent_client.hpp"
 #include "../include/tracker.hpp"
 #include "../include/message.hpp"
+#include "../include/logger.hpp"
 
 Torrent_Client::Torrent_Client(const Torrent_File&& file) : _torr_file(file) {}
 
@@ -45,7 +48,11 @@ void Torrent_Client::start_io_ctx() {
 }
 
 void Torrent_Client::calculate_pieces() {
+	Logger log(std::cout);
+
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
+
+	log << LOG_INFO << "Calculating piece count\n";
 
 	#pragma omp parallel for
 	for (int piece_index = 0; piece_index < total_piece_count; piece_index++) {
@@ -113,6 +120,8 @@ bool Torrent_Client::pre_allocate_file(std::string& file_path) {
 }
 
 void Torrent_Client::download_file(std::string& file_path) {
+	std::shared_ptr<Logger> log = std::make_shared<Logger>(std::cout);
+
 	Tracker tracker(&_torr_file);
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
 	if (file_path.empty()) file_path = this->_torr_file.info->name;
@@ -122,7 +131,7 @@ void Torrent_Client::download_file(std::string& file_path) {
 	this->get_peers(std::move(tracker), _peers_thread_exit_signal.get_future());
 
 	for (int i = 0; i < MAX_THREADS; i++) {
-		asio::post(this->pool, [this, f_mapper, total_piece_count]() {
+		asio::post(this->pool, [this, f_mapper, total_piece_count, log]() {
 			Piece_Work pw;
 			Piece_Manager pm(&_pw_queue, total_piece_count);
 			Peer *peer = nullptr;
@@ -158,8 +167,15 @@ void Torrent_Client::download_file(std::string& file_path) {
 					std::unique_lock<std::mutex> lock(this->_mtx);
 					this->_bitfield->set_piece(pw.index);
 					this->completed_pieces.fetch_add(1);
+
+					(*log) << LOG_INFO << "(Progress: " << std::fixed << std::setprecision(2)
+						   << get_piece_progress(total_piece_count) << "% ) Piece# " << pw.index << " recieved"
+						   << "from Thread ID: " << std::this_thread::get_id() << std::endl;
 				} else {
 					_pw_queue << pw;
+
+					(*log) << LOG_WARN << "Piece# " << pw.index << " not completed. Adding back to Queue"
+						   << std::endl;
 				}
 			}
 		});
@@ -167,6 +183,8 @@ void Torrent_Client::download_file(std::string& file_path) {
 }
 
 void Torrent_Client::wait_for_download(std::string& file_path) {
+	Logger log(std::cout);
+
 	int total_piece_count = _torr_file.info->pieces.size() / PIECE_HASH_SIZE;
 	if (file_path.empty()) file_path = this->_torr_file.info->name;
 	auto f_mapper = std::make_shared<File_Mapper>(file_path, this->_torr_file.info->length);
@@ -188,6 +206,11 @@ void Torrent_Client::wait_for_download(std::string& file_path) {
 	this->pool.join();
 	completion_watcher.join();
 
-	std::cout << "Download completed\n";
 	f_mapper->flush();
+
+	log << LOG_INFO << "Downloading " << file_path << " completed" << std::endl;
+}
+
+float Torrent_Client::get_piece_progress(const int total_piece_count) {
+	return (std::float_t) ((std::float_t) completed_pieces.load() / total_piece_count * 100);
 }

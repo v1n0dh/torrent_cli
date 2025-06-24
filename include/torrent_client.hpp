@@ -47,6 +47,8 @@ private:
 	std::mutex _mtx;
 
 	std::atomic<int> completed_pieces = 0;
+
+	float get_piece_progress(const int total_piece_count);
 };
 
 #endif

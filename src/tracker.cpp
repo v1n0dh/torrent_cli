@@ -13,6 +13,7 @@
 #include "../include/bencode_parser.hpp"
 #include "../include/tracker.hpp"
 #include "../include/utils.hpp"
+#include "../include/logger.hpp"
 
 std::string Tracker::build_tracker_url(const std::string& tracker_url, const std::string& peer_id, const std::string& port) {
 	std::stringstream url;
@@ -31,10 +32,12 @@ std::string Tracker::build_tracker_url(const std::string& tracker_url, const std
 }
 
 std::unordered_map<std::string, uint16_t> Tracker::extract_peers_from_tracker_resp(const std::string& peers_byts) {
+	Logger log(std::cout);
+
 	int peer_size = 6;
 	int num_peers = peers_byts.length() / peer_size;
 	if (peers_byts.length() % peer_size != 0) {
-		std::cerr << "Received malformed peers\n";
+		log << LOG_ERROR << "Received malformed peers" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
@@ -66,6 +69,8 @@ std::unordered_map<std::string, uint16_t> Tracker::extract_peers_from_tracker_re
 }
 
 std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::string& peer_id, const std::string& port) {
+	Logger log(std::cout);
+
 	cpr::Response response;
 
 	if (!torrent->announce_list.empty()) {
@@ -82,7 +87,9 @@ std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::stri
 			response = cpr::Get(cpr::Url{url});
 
 			if (response.status_code != 200) {
-				std::cerr << std::strerror(errno) << "; Could not send tracker request to " << tracker_url << "\n";
+				log << LOG_ERROR << std::strerror(errno) << "; Could not send tracker request to "
+					<< tracker_url << std::endl;
+
 				torrent->announce_list.push_back(tracker_url);
 			} else
 				torrent->announce_list.push_front(tracker_url);
@@ -93,7 +100,8 @@ std::unordered_map<std::string, uint16_t> Tracker::request_peers(const std::stri
 			response = cpr::Get(cpr::Url{url});
 
 			if (response.status_code != 200) {
-				std::cerr << std::strerror(errno) << "; Could not send tracker request to " << torrent->announce << "\n";
+				log << LOG_ERROR << std::strerror(errno) << "; Could not send tracker request to "
+					<< torrent->announce << std::endl;
 				exit(EXIT_FAILURE);
 			}
 	}

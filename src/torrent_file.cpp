@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <cstdlib>
-#include <cstring>
 #include <fstream>
 #include <json/value.h>
 #include <sstream>
@@ -9,6 +8,7 @@
 
 #include "../include/bencode_parser.hpp"
 #include "../include/torrent_file.hpp"
+#include "../include/logger.hpp"
 
 std::vector<uint8_t> Torrent_Info::SHA1_info_hash(const std::string& info_str) {
 	unsigned char raw_hash[SHA_DIGEST_LENGTH];
@@ -22,9 +22,11 @@ std::vector<uint8_t> Torrent_Info::SHA1_info_hash(const std::string& info_str) {
 }
 
 Torrent_File::Torrent_File(const std::string& torrent_file_path) {
+	Logger log(std::cout);
+
 	std::ifstream torrent_file(torrent_file_path);
 	if (!torrent_file.is_open()) {
-		std::cerr << strerror(errno) << "Unable to open the torrent file " << torrent_file_path << std::endl;
+		log << LOG_ERROR << "Unable to open torrent file " << torrent_file_path << std::endl;
 		exit(EXIT_FAILURE);
 	}
 

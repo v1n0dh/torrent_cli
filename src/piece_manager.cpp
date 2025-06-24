@@ -10,12 +10,15 @@
 #include "../include/message.hpp"
 #include "../include/piece_manager.hpp"
 #include "../include/utils.hpp"
+#include "../include/logger.hpp"
 
 bool Piece_Manager::download_piece(Piece_Work& piece_work,
 								   Peer& peer,
 								   File_Mapper& f_mapper,
 								   size_t piece_size,
 								   std::mutex& mtx) {
+	Logger log(std::cout);
+
 	if (peer._bitfield.is_bitfield_set() && !peer.piece_available(piece_work.index))
 		return false;
 
@@ -99,7 +102,7 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work,
 	if (!p.is_completed()) return false;
 
 	if (!check_piece_hash(p, piece_work.piece_hash)) {
-		std::cerr << "PIECE Hash doesn't match Piece: " << p.index << "\n";
+		log << LOG_WARN << "Piece# " << piece_work.index << " Hash doesn't match\n";
 		peer.close();
 		return false;
 	}
@@ -108,9 +111,6 @@ bool Piece_Manager::download_piece(Piece_Work& piece_work,
 		std::unique_lock<std::mutex> lock(mtx);
 		f_mapper.wite_piece(p, piece_size);
 	}
-
-	std::cout << "Piece: " << p.index << " downloaded from " << peer.ip_address
-			  << " by thread " << std::this_thread::get_id() << " \n";
 
 	return true;
 }

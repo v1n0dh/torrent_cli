@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../include/message.hpp"
+#include "../include/logger.hpp"
 #include "../include/utils.hpp"
 
 Message::Message() { this->len = 0; this->id = 0; }
@@ -52,11 +53,13 @@ void Bitfield::set(const std::vector<uint8_t>& bitfield) { this->bitfield = bitf
 bool Bitfield::is_bitfield_set() { return !this->bitfield.empty(); }
 
 void Bitfield::set_piece(int index) {
+	Logger log(std::cout);
+
 	int byte_idx = index / 8;
 	int offset = index % 8;
 
 	if (byte_idx < 0 || byte_idx > this->bitfield.size()) {
-		std::cerr << "Error: Invalid piece index\n";
+		log << LOG_ERROR << "Invalid Piece Index" << std::endl;
 		return;
 	}
 
