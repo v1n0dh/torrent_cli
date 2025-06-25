@@ -10,12 +10,11 @@ A high-performance, command-line BitTorrent client written in modern C++23, desi
 - Prioritized piece selection strategy combined with SHA-1 hash verification for robust data integrity.
 - Efficient file mapping and reconstruction of multi-file torrents into their original folder and file structures.
 - Timeout handling, retry mechanisms, and error recovery for stable peer connection management.
-- Custom thread pool to optimize CPU and IO resource utilization and improve download throughput.
 - Designed with modern C++23 features such as concepts, smart pointers, and atomic operations to ensure safe and clean code.
 
 ## Requirements
 
-- C++23 compatible compiler (e.g., GCC 12+, Clang 15+, MSVC latest)
+- C++23 compatible compiler (e.g., GCC 12+, Clang 15+)
 - Standalone ASIO library (https://think-async.com)
 - OpenSSL library (for SHA-1 hashing)
 - JsonCPP, CPR libraries
